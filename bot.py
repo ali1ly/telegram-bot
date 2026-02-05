@@ -1,16 +1,17 @@
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-import os
+from datetime import datetime
 
-TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+STARTED_AT = datetime.now()
+CHECKS_TODAY = 0
+ALERTS_TODAY = 0
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("البوت يعمل ✅")
-
-def main():
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uptime = datetime.now() - STARTED_AT
+    msg = (
+        "📊 الحالة\n\n"
+        f"🟢 البوت يعمل\n"
+        f"⏱️ Uptime: {str(uptime).split('.')[0]}\n"
+        f"🔎 فحوصات اليوم: {CHECKS_TODAY}\n"
+        f"🔔 إشارات اليوم: {ALERTS_TODAY}\n"
+        f"🧭 الوضع: Manual\n"
+    )
+    await update.message.reply_text(msg)
