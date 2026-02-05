@@ -1,49 +1,121 @@
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import os
 import logging
+from datetime import datetime, timezone
 
-# تفعيل اللوج
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
+
+# ---------- Logging ----------
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     level=logging.INFO,
 )
+logger = logging.getLogger("ali-snipe-bot")
 
-TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+# ---------- Config ----------
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # Railway variable
+DEFAULT_MODE = "MANUAL"  # MANUAL / SEMI / AUTO
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# In-memory per-user state (simple MVP)
+USER_MODE: dict[int, str] = {}
+
+
+def get_mode(user_id: int) -> str:
+    return USER_MODE.get(user_id, DEFAULT_MODE)
+
+
+def set_mode(user_id: int, mode: str) -> None:
+    USER_MODE[user_id] = mode
+
+
+# ---------- Handlers ----------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    msg = (
-        "🧠 Ali Snipe Bot\n\n"
-        "الحالة: 🟢 يعمل\n"
-        "الوضع: Manual\n\n"
-        f"مرحبًا {user.first_name} 👋\n"
-        "هذا بوت قنص العملات الجديدة.\n"
-        "لا توجد إشارات حالياً."
-    )
-    await update.message.reply_text(msg)
+    uid = user.id if user else 0
+    mode = get_mode(uid)
 
-async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
-        "📊 حالة البوت\n\n"
-        "🟢 البوت يعمل\n"
-        "⚙️ الوضع: Manual\n"
-        "🚫 Auto Sniping: غير مفعل\n"
+        "✅ **Ali Snipe Bot شغّال**\n"
+        f"🧭 الوضع الحالي: **{mode}**\n\n"
+        "الأوامر:\n"
+        "• /status — حالة البوت\n"
+        "• /mode — تغيير الوضع\n"
+        "• /setmode MANUAL|SEMI|AUTO — ضبط الوضع مباشرة\n"
     )
-    await update.message.reply_text(msg)
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
-def main():
+
+async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    uid = user.id if user else 0
+    mode = get_mode(uid)
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    msg = (
+        "📊 **Status**\n"
+        f"🟢 البوت: **ONLINE**\n"
+        f"🧭 وضعك: **{mode}**\n"
+        f"⏱ الوقت: `{now}`\n"
+    )
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+
+async def mode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    uid = user.id if user else 0
+    current = get_mode(uid)
+
+    msg = (
+        "🧭 **الأوضاع**\n\n"
+        f"الوضع الحالي: **{current}**\n\n"
+        "غيّر وضعك هكذا:\n"
+        "• `/setmode MANUAL`\n"
+        "• `/setmode SEMI`\n"
+        "• `/setmode AUTO`\n\n"
+        "شرح سريع:\n"
+        "MANUAL = إشعارات فقط\n"
+        "SEMI   = إشعار + تأكيد منك\n"
+        "AUTO   = تنفيذ تلقائي (لاحقًا)\n"
+    )
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+
+async def setmode_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    uid = user.id if user else 0
+
+    if not context.args:
+        await update.message.reply_text("اكتب: /setmode MANUAL أو /setmode SEMI أو /setmode AUTO")
+        return
+
+    mode_value = context.args[0].strip().upper()
+    if mode_value not in {"MANUAL", "SEMI", "AUTO"}:
+        await update.message.reply_text("❌ وضع غير صحيح. اختر: MANUAL / SEMI / AUTO")
+        return
+
+    set_mode(uid, mode_value)
+    await update.message.reply_text(f"✅ تم ضبط وضعك إلى: {mode_value}")
+
+
+# ---------- Main ----------
+def main() -> None:
     if not TOKEN:
-        raise RuntimeError("TELEGRAM_BOT_TOKEN is not set")
+        raise RuntimeError("Missing TELEGRAM_BOT_TOKEN env var")
 
-    app = ApplicationBuilder().token(TOKEN).build()
+    # Important: use Application.builder() (PTB v20+)
+    app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("status", status))
+    app.add_handler(CommandHandler("mode", mode))
+    app.add_handler(CommandHandler("setmode", setmode_cmd))
 
-    app.run_polling()
+    logger.info("Bot starting polling...")
+    app.run_polling(drop_pending_updates=True)
+
 
 if __name__ == "__main__":
     main()
+
 
 
