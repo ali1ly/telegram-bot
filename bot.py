@@ -1,66 +1,48 @@
-import os
-from datetime import datetime
-
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+import os
+import logging
+
+# تفعيل اللوج
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
 )
 
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-
-STARTED_AT = datetime.now()
-CHECKS_TODAY = 0
-ALERTS_TODAY = 0
-
+TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    text = (
+    msg = (
         "🧠 Ali Snipe Bot\n\n"
         "الحالة: 🟢 يعمل\n"
         "الوضع: Manual\n\n"
         f"مرحبًا {user.first_name} 👋\n"
-        "هذا بوت قنص العملات الجديدة\n"
-        "لا إشارات الآن."
-    )
-    await update.message.reply_text(text)
-
-
-async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uptime = datetime.now() - STARTED_AT
-    msg = (
-        "📊 الحالة\n\n"
-        "🟢 البوت يعمل\n"
-        f"⏱️ Uptime: {str(uptime).split('.')[0]}\n"
-        f"🔎 فحوصات اليوم: {CHECKS_TODAY}\n"
-        f"🔔 إشارات اليوم: {ALERTS_TODAY}\n"
-        "🧭 الوضع: Manual\n"
+        "هذا بوت قنص العملات الجديدة.\n"
+        "لا توجد إشارات حالياً."
     )
     await update.message.reply_text(msg)
 
-
-async def heartbeat(context: ContextTypes.DEFAULT_TYPE):
-    global CHECKS_TODAY
-    CHECKS_TODAY += 1
-
+async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = (
+        "📊 حالة البوت\n\n"
+        "🟢 البوت يعمل\n"
+        "⚙️ الوضع: Manual\n"
+        "🚫 Auto Sniping: غير مفعل\n"
+    )
+    await update.message.reply_text(msg)
 
 def main():
     if not TOKEN:
-        raise RuntimeError("Missing TELEGRAM_BOT_TOKEN env var")
+        raise RuntimeError("TELEGRAM_BOT_TOKEN is not set")
 
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Commands
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("status", status))
 
-    # Heartbeat every 30 seconds
-    app.job_queue.run_repeating(heartbeat, interval=30, first=5)
-
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
-
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
+
